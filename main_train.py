@@ -15,6 +15,7 @@ from Net.Trainer import Trainer
 from Utils.Options import args_parser
 
 
+
 def custom_weights_init(m):
     if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
         nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -95,7 +96,8 @@ def main():
 
     part_train_dataset = origin_dataset.split(part_train_list)
     part_test_dataset = origin_dataset.split(part_test_list)
-    part_model = train('Train of part division model', part_train_dataset, part_test_dataset, args, num_workers, device, "Record/part_model.txt")
+    part_model = train('Train of part division model', part_train_dataset, part_test_dataset, args, num_workers,
+                       device, "Record/part_model_1.txt")
 
     img, label = origin_dataset.get_origin(0)
     img = transform(img).unsqueeze(0).to(device)
@@ -125,9 +127,9 @@ def main():
     whole_full_train_dataset = full_dataset.split(whole_full_train_list)
     whole_full_test_dataset = full_dataset.split(whole_full_test_list)
     part_full_model = train('Train of part model', part_full_train_dataset, part_full_test_dataset, args, num_workers,
-                            device, 'Record/part_full_model.txt')
+                            device, 'Record/part_full_model_1.txt')
     whole_full_model = train('Train of whole model', whole_full_train_dataset, whole_full_test_dataset, args,
-                             num_workers, device, 'Record/whole_full_model.txt')
+                             num_workers, device, 'Record/whole_full_model_1.txt')
 
     img, label = part_full_train_dataset.get_origin(0)
     img = transform(img).unsqueeze(0).to(device)

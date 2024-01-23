@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
-import torch.nn.utils as utils
 
 
 class Recorder:
-    def __init__(self, model: nn.Module, epoch, optimizer, criterion):
+    def __init__(self, model: nn.Module, epoch=None, optimizer=None, criterion=None):
         self.model = model
         self.epoch = epoch
         self.optimizer = optimizer
@@ -24,3 +23,7 @@ class Recorder:
         self.optimizer.load_state_dict(checkpoint['model_state_dict'])
         self.epoch = checkpoint['epoch']
         self.criterion = checkpoint['loss']
+
+    def load_model(self, path):
+        checkpoint = torch.load(path)
+        self.model.load_state_dict(checkpoint['model_state_dict'])

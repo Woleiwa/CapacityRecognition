@@ -1,11 +1,47 @@
 import copy
-
 import torch
+
+import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from torch.utils.data import DataLoader
+from torchvision.ops import box_iou
+
+
+def calculate_accuracy(targets, predictions, iou_threshold=0.5):
+    correct_detections = 0
+
+    for target, prediction in zip(targets, predictions):
+        target_boxes = target['boxes'].cpu().numpy()
+        pred_boxes = prediction['boxes'].cpu().numpy()
+        iou_matrix = box_iou(torch.tensor(target_boxes), torch.tensor(pred_boxes)).numpy()
+        if iou_matrix.size == 0:
+            max_iou_per_target = np.full_like(iou_matrix, 0)
+        else:
+            max_iou_per_target = np.max(iou_matrix, axis=1)
+        correct_detections += np.sum(max_iou_per_target > iou_threshold)
+
+    accuracy = correct_detections / len(targets)
+    return accuracy
+
+
+def calculate_iou(targets, predictions):
+    total_iou = 0
+
+    for target, prediction in zip(targets, predictions):
+        target_boxes = target['boxes'].cpu().numpy()
+        pred_boxes = prediction['boxes'].cpu().numpy()
+        iou_matrix = box_iou(torch.tensor(target_boxes), torch.tensor(pred_boxes)).numpy()
+        if iou_matrix.size == 0:
+            max_iou_per_target = np.full_like(iou_matrix, 0)
+        else:
+            max_iou_per_target = np.max(iou_matrix, axis=1)
+        total_iou += np.sum(max_iou_per_target)
+
+    average_iou = total_iou / len(targets)
+    return average_iou
 
 
 class Trainer:
@@ -21,7 +57,7 @@ class Trainer:
         self.loss_history = []
 
     def process(self, epoch):
-        # the major part of training process of all model
+        # the major part of training process of merely all model
         self.model.train()
         epoch_loss = []
         for x, y in self.train_loader:
@@ -69,6 +105,33 @@ class Trainer:
 
         return accuracy, precision, recall, f1
 
+    def train_obj_detection(self, epochs):
+        self.model.to(self.device)
+        best_acc = 0.0
+        best_model_state = copy.deepcopy(self.model.state_dict())
+        for epoch in range(epochs):
+            self.model.train()
+            train_loss = 0.0
+
+            for image, target in self.train_loader:
+                images = list(i.to(self.device) for i in image)
+                targets = [{k: v.to(self.device) for k, v in t.items()} for t in target]
+                images = torch.stack(images, dim=0)
+                self.optimizer.zero_grad()
+                loss_dict = self.model(images, targets)
+                losses = sum(loss for loss in loss_dict.values())
+                losses.backward()
+                self.optimizer.step()
+                train_loss += losses.item()
+            train_loss = train_loss / len(self.train_loader)
+            accuracy, iou = self.evaluate_obj_detection()
+            print("Epoch:{}, Train Loss:{}, Accuracy:{}, Iou:{}".format(epoch, train_loss, accuracy, iou))
+
+            if accuracy > best_acc:
+                best_acc = accuracy
+                best_model_state = copy.deepcopy(self.model.state_dict())
+        self.model.load_state_dict(best_model_state)
+
     def train_with_evaluate(self, epochs):
         # the function train the model and select the state dicts with the best evaluate accuracy
         self.acc_history = []
@@ -92,3 +155,24 @@ class Trainer:
         for epoch, acc, loss in zip(range(len(self.acc_history)), self.acc_history, self.loss_history):
             record = "Epoch:" + str(epoch) + ",Accuracy:" + str(acc) + ",Loss:" + str(loss) + "\n"
             file.writelines(record)
+
+    def evaluate_obj_detection(self):
+        self.model.eval()
+
+        all_targets = []
+        all_predictions = []
+
+        with torch.no_grad():
+            for images, targets in self.test_loader:
+                images = list(img.to(self.device) for img in images)
+                targets = [{k: v.to(self.device) for k, v in t.items()} for t in targets]
+
+                predictions = self.model(images)
+
+                all_targets.extend(targets)
+                all_predictions.extend(predictions)
+
+        accuracy = calculate_accuracy(all_targets, all_predictions)
+        iou = calculate_iou(targets, predictions)
+
+        return accuracy, iou

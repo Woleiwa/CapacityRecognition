@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+
 from torchvision import transforms, models
 from DataProcessor.DataFetcher import DataFetcher, ImgProcessor
 from Net.ModelRecorder import Recorder
@@ -53,9 +54,9 @@ def main():
     part_full_recorder = Recorder(part_full_model)
     whole_full_recorder = Recorder(whole_full_model)
 
-    part_recorder.read_from_file('Record/part_model.txt')
-    part_full_recorder.read_from_file('Record/part_full_model.txt')
-    whole_full_recorder.read_from_file('Record/whole_full_model.txt')
+    part_recorder.load_model('Record/part_model_1.txt')
+    part_full_recorder.load_model('Record/part_full_model_1.txt')
+    whole_full_recorder.load_model('Record/whole_full_model_1.txt')
 
     part_model = part_recorder.model
     part_full_model = part_full_recorder.model
@@ -81,6 +82,7 @@ def main():
 
         if flag:
             for shape in info.shapes:
+                print(str(num) + ':')
                 num += 1
                 left = int(shape.get_points()[0][0])
                 upper = int(shape.get_points()[0][1])
@@ -92,9 +94,7 @@ def main():
                 with torch.no_grad():
                     y = part_model(x)
                 print(shape.label)
-                print(y)
                 predicted_class = torch.argmax(y).item()
-                print(predicted_class)
                 if predicted_class == 0:
                     with torch.no_grad():
                         res = part_full_model(x)
@@ -104,9 +104,7 @@ def main():
                         res = whole_full_model(x)
                     prolix = 'whole'
 
-                print(res)
                 predicted_class = torch.argmax(res).item()
-                print(predicted_class)
                 if predicted_class == 0:
                     prolix += '_full'
                 else:
@@ -115,6 +113,7 @@ def main():
                 if prolix == shape.get_label():
                     accurate_num += 1
                 print(prolix)
+                print('\n')
 
     rate = accurate_num / num
     print("Rate:{:.4f}%".format(rate * 100))

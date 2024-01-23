@@ -2,6 +2,7 @@ import os
 import glob
 import json
 
+from sklearn.preprocessing import LabelEncoder
 from PIL import Image
 
 
@@ -93,3 +94,40 @@ class DataFetcher:
 
     def get_info(self):
         return self.image, self.info
+
+    def obj_detection_info(self):
+        res_image = []
+        res_target = []
+        label_list = []
+
+        encoder = LabelEncoder()
+        encoder.fit(self.part_label)
+
+        for img, info in zip(self.image, self.info):
+            shapes = info.get_shapes()
+            judge = True
+            for shape in shapes:
+                label = shape.get_label()
+                if label == 'unjudge':
+                    judge = False
+
+            if judge:
+                res_image.append(img)
+                image_dict = {'boxes': [], 'labels': []}
+                for shape in info.get_shapes():
+                    label = shape.get_label().split('_')[0]
+                    label = encoder.transform([label])[0]
+                    left = float(shape.get_points()[0][0])
+                    upper = float(shape.get_points()[0][1])
+                    right = float(shape.get_points()[1][0])
+                    lower = float(shape.get_points()[1][1])
+                    label_list.append(label)
+                    image_dict['labels'].append(label)
+                    image_dict['boxes'].append([left, upper, right, lower])
+
+                res_target.append(image_dict)
+
+
+        print(len(res_image))
+        print(len(res_target))
+        return res_image, res_target
