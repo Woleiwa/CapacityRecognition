@@ -58,18 +58,28 @@ class DataFetcher:
         self.part_label = []
         self.full_label = []
 
-    def read_from_file(self, height, width):
+    def read_images(self):
+        file_names = []
         for file_path in glob.glob(os.path.join(self.path, '*')):
             file_name, file_extension = os.path.splitext(file_path)
-
             file_extension = file_extension[1:]
             if file_extension == 'jpg':
                 self.image.append(Image.open(file_path))
-                json_file_path = file_name + '.json'
-                with open(json_file_path, 'r') as json_file:
-                    data = json.load(json_file)
-                    img_info = ImageInfo(data)
-                    self.info.append(img_info)
+                file_names.append(file_name)
+
+        return file_names
+
+    def get_image(self):
+        return self.image
+
+    def read_from_file(self, height, width):
+        filenames = self.read_images()
+        for file_name in filenames:
+            json_file_path = file_name + '.json'
+            with open(json_file_path, 'r') as json_file:
+                data = json.load(json_file)
+                img_info = ImageInfo(data)
+                self.info.append(img_info)
 
         num = 0
         for img, info in zip(self.image, self.info):
@@ -96,38 +106,45 @@ class DataFetcher:
         return self.image, self.info
 
     def obj_detection_info(self):
-        res_image = []
-        res_target = []
-        label_list = []
+        whole_image = []
+        whole_target = []
+        part_target = []
 
         encoder = LabelEncoder()
         encoder.fit(self.part_label)
 
         for img, info in zip(self.image, self.info):
             shapes = info.get_shapes()
-            judge = True
-            for shape in shapes:
-                label = shape.get_label()
-                if label == 'unjudge':
-                    judge = False
+            flag = False
 
-            if judge:
-                res_image.append(img)
-                image_dict = {'boxes': [], 'labels': []}
-                for shape in info.get_shapes():
+            for shape in shapes:
+                label = shape.get_label().split('_')[0]
+                if label == 'whole':
+                    flag = True
+
+            if flag:
+                part_dict = {'boxes': [], 'labels': []}
+                whole_dict = {'boxes': [], 'labels': []}
+                whole_image.append(img)
+
+                for shape in shapes:
                     label = shape.get_label().split('_')[0]
-                    label = encoder.transform([label])[0]
                     left = float(shape.get_points()[0][0])
                     upper = float(shape.get_points()[0][1])
                     right = float(shape.get_points()[1][0])
                     lower = float(shape.get_points()[1][1])
-                    label_list.append(label)
-                    image_dict['labels'].append(label)
-                    image_dict['boxes'].append([left, upper, right, lower])
 
-                res_target.append(image_dict)
+                    if label == 'whole':
+                        label = 1
+                        whole_dict['labels'].append(label)
+                        whole_dict['boxes'].append([left, upper, right, lower])
 
+                    else:
+                        label = 1
+                        part_dict['labels'].append(label)
+                        part_dict['boxes'].append([left, upper, right, lower])
 
-        print(len(res_image))
-        print(len(res_target))
-        return res_image, res_target
+                part_target.append(part_dict)
+                whole_target.append(whole_dict)
+
+        return whole_image, whole_target, part_target

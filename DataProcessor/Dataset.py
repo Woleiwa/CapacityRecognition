@@ -1,8 +1,12 @@
 import copy
-
 import torch
+import cv2
+
+import numpy as np
+
 from sklearn.preprocessing import LabelEncoder
 from torch.utils.data import Dataset
+from PIL import Image
 
 
 class CustomDataset(Dataset):
@@ -42,15 +46,40 @@ class CustomDataset(Dataset):
         return image, label
 
 
+def canny_detection(image):
+    numpy_array = np.array(image)
+    image = cv2.cvtColor(numpy_array, cv2.COLOR_RGB2BGR)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    blurred = cv2.GaussianBlur(image, (5, 5), 0)
+    edges = cv2.Canny(blurred, 50, 150)
+    image = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+    image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    return image
+
+
+def clahe_enhance(image):
+    numpy_array = np.array(image)
+    image = cv2.cvtColor(numpy_array, cv2.COLOR_RGB2BGR)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(1, 1))
+
+    enhanced_image = clahe.apply(image)
+    enhanced_image = clahe.apply(enhanced_image)
+    image = cv2.cvtColor(enhanced_image, cv2.COLOR_GRAY2BGR)
+    image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    return image
+
+
 class ObjDetectionTransformer:
     def __init__(self, transform):
         self.transform = transform
 
     def process(self, image, annotation):
+        # image = clahe_enhance(image)
         image = self.transform(image)
-        target = {}
-        target['boxes'] = torch.tensor(annotation['boxes'], dtype=torch.float32)
-        target['labels'] = torch.tensor(annotation['labels'], dtype=torch.int64)
+        target = {'boxes': torch.tensor(annotation['boxes'], dtype=torch.float32),
+                  'labels': torch.tensor(annotation['labels'], dtype=torch.int64)}
         return image, target
 
     def __call__(self, image, target):

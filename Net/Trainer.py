@@ -1,4 +1,6 @@
 import copy
+import math
+
 import torch
 
 import numpy as np
@@ -10,7 +12,7 @@ from torch.utils.data import DataLoader
 from torchvision.ops import box_iou
 
 
-def calculate_accuracy(targets, predictions, iou_threshold=0.5):
+def calculate_accuracy(targets, predictions, iou_threshold=0.75):
     correct_detections = 0
 
     for target, prediction in zip(targets, predictions):
@@ -107,8 +109,8 @@ class Trainer:
 
     def train_obj_detection(self, epochs):
         self.model.to(self.device)
-        best_acc = 0.0
-        best_model_state = copy.deepcopy(self.model.state_dict())
+        best_distance = 2
+        best_state = copy.deepcopy(self.model.state_dict())
         for epoch in range(epochs):
             self.model.train()
             train_loss = 0.0
@@ -124,13 +126,13 @@ class Trainer:
                 self.optimizer.step()
                 train_loss += losses.item()
             train_loss = train_loss / len(self.train_loader)
-            accuracy, iou = self.evaluate_obj_detection()
+            accuracy, iou, distance = self.evaluate_obj_detection()
+            if best_distance > distance:
+                best_distance = distance
+                best_state = copy.deepcopy(self.model.state_dict())
             print("Epoch:{}, Train Loss:{}, Accuracy:{}, Iou:{}".format(epoch, train_loss, accuracy, iou))
 
-            if accuracy > best_acc:
-                best_acc = accuracy
-                best_model_state = copy.deepcopy(self.model.state_dict())
-        self.model.load_state_dict(best_model_state)
+        self.model.load_state_dict(best_state)
 
     def train_with_evaluate(self, epochs):
         # the function train the model and select the state dicts with the best evaluate accuracy
@@ -174,5 +176,7 @@ class Trainer:
 
         accuracy = calculate_accuracy(all_targets, all_predictions)
         iou = calculate_iou(targets, predictions)
+        distance = (1 - accuracy) * (1 - accuracy) + (1 - iou) * (1 - iou)
+        distance = math.pow(distance, 1/ 2)
 
-        return accuracy, iou
+        return accuracy, iou, distance
