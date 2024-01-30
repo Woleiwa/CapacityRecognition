@@ -2,12 +2,9 @@ import platform
 import random
 import torch
 
-import torchvision.models as models
 
 from torch import optim
-from torchvision.models import ResNet50_Weights
-from torchvision.models.detection import FasterRCNN, fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights
-from torchvision.models.detection.rpn import AnchorGenerator
+from torchvision.models.detection import  fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights
 from Net.ModelRecorder import Recorder
 from Utils.Options import args_parser
 from torchvision.transforms import transforms
@@ -34,11 +31,11 @@ def split_list(num):
     return train_list, test_list
 
 
-def train(dataset, train_list, test_list, record_path, num_classes, num_workers, args):
+def train(dataset, train_list, test_list, record_path, num_workers, args):
     model = fasterrcnn_resnet50_fpn(weights=FasterRCNN_ResNet50_FPN_Weights.COCO_V1)
 
     recorder = Recorder(model)
-    # recorder.load_model('Record/whole_detection.txt')
+    recorder.load_model(record_path)
     model = recorder.model
 
     train_dataset = dataset.split(train_list)
@@ -77,13 +74,14 @@ def main():
     dataFetcher = DataFetcher('Data')
     dataFetcher.read_from_file(224, 224)
     images, targets, part_target = dataFetcher.obj_detection_info()
-    # harris_detect(part_images)
+    print("Total num{}, Total targets{}".format(len(images), len(targets)))
+
     origin_dataset = CustomObjDetectionDataset(images, targets, transformer)
-    # origin_part_dataset = CustomObjDetectionDataset(images, part_target, transformer)
+    origin_part_dataset = CustomObjDetectionDataset(images, part_target, transformer)
     train_list, test_list = split_list(len(images))
-    # part_train_list, part_test_list = split_list(len(images))
-    train(origin_dataset, train_list, test_list, 'Record/whole_detection.txt', 2, num_workers, args)
-    # train(origin_part_dataset, part_train_list, part_test_list, 'Record/part_detection.txt', 2, num_workers, args)
+    part_train_list, part_test_list = split_list(len(images))
+    train(origin_dataset, train_list, test_list, 'Record/whole_detection.txt', num_workers, args)
+    train(origin_part_dataset, part_train_list, part_test_list, 'Record/part_detection.txt', num_workers, args)
 
 
 if __name__ == '__main__':

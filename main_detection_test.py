@@ -1,25 +1,22 @@
 import numpy as np
 import torch
 import cv2
+import os
 
-import torchvision.models as models
-
-from torchvision.models import ResNet18_Weights
-from torchvision.models.detection import FasterRCNN
-from torchvision.models.detection.rpn import AnchorGenerator
+from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights
 from DataProcessor.DataFetcher import DataFetcher
-from DataProcessor.Dataset import clahe_enhance
 from Net.ModelRecorder import Recorder
 from torchvision.transforms import transforms
 
 
-def draw_bounding_box(image, boxes, origin_box):
+def draw_bounding_box(image, boxes, origin_boxes):
     for box in boxes:
         box = [int(coord) for coord in box]
         cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
 
-    box =[int(coord) for  coord in origin_box]
-    cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 2)
+    for box in origin_boxes:
+        box = [int(coord) for coord in box]
+        cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 2)
 
 
 def corner_detect(image):
@@ -32,32 +29,35 @@ def corner_detect(image):
     cv2.destroyAllWindows()
 
 
-def main():
+def detect_directory(directory_path):
+    if os.path.exists(directory_path):
+        print(directory_path + " exists")
+    else:
+        os.makedirs(directory_path)
+
+
+class Cutter:
+    def __init__(self, path):
+        self.cut_count = 0
+        self.directory_path = path
+        detect_directory(self.directory_path)
+
+    def cut_images(self, image, boxes):
+        for box in boxes:
+            box = [int(coord) for coord in box]
+            cut_image = image.crop(box)
+            path = self.directory_path + "/true_" + str(self.cut_count) + ".jpg"
+            cut_image.save(path)
+            self.cut_count += 1
+
+
+def test_model(model, images, targets, cutter: Cutter, cnt=0):
     transform = transforms.Compose([
         transforms.ToTensor(),
     ])
-    dataFetcher = DataFetcher('Data')
-    dataFetcher.read_images()
-    images, targets, part_labels = dataFetcher.obj_detection_info()
-
-    backbone = models.resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
-    backbone = torch.nn.Sequential(*(list(backbone.children())[:-1]))
-    backbone.out_channels = 512
-    anchor_generator = AnchorGenerator(sizes=((32, 64, 128, 256, 512),),
-                                       aspect_ratios=((0.5, 1.0, 2.0),))
-    model = FasterRCNN(backbone,
-                       num_classes=2,
-                       rpn_anchor_generator=anchor_generator)
-
-    recorder = Recorder(model)
-    recorder.load_model('Record/whole_detection.txt')
-    model = recorder.model
-
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
     model.eval()
-
-    cnt = 0
 
     with torch.no_grad():
         for image, target in zip(images, targets):
@@ -68,14 +68,23 @@ def main():
             boxes = prediction[0]['boxes'].cpu().numpy()
             numpy_image = np.array(image)
             opencv_image = cv2.cvtColor(numpy_image, cv2.COLOR_RGB2BGR)
-            draw_bounding_box(opencv_image, boxes, target['boxes'][0])
+            draw_bounding_box(opencv_image, boxes, target['boxes'])
             path = 'DetectionImg/' + str(cnt) + '.jpg'
             cnt += 1
             cv2.imwrite(path, opencv_image)
+            cutter.cut_images(image, boxes)
 
-    dataFetcher = DataFetcher('Detection')
-    dataFetcher.read_images()
-    images = dataFetcher.get_image()
+    return cnt
+
+
+def test_on_new_data(model, images, cutter: Cutter, cnt=0):
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+    ])
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
+    model.eval()
+
     with torch.no_grad():
         for image in images:
             x = transform(image).unsqueeze(0)
@@ -90,6 +99,40 @@ def main():
             path = 'DetectionTest/' + str(cnt) + '.jpg'
             cnt += 1
             cv2.imwrite(path, opencv_image)
+            cutter.cut_images(image, boxes)
+
+    return cnt
+
+
+def main():
+    dataFetcher = DataFetcher('Data')
+    dataFetcher.read_from_file(224, 224)
+    images, targets, part_labels = dataFetcher.obj_detection_info()
+    print("Total num{}, Total targets{}".format(len(images), len(targets)))
+    model = fasterrcnn_resnet50_fpn(weights=FasterRCNN_ResNet50_FPN_Weights.COCO_V1)
+    part_model = fasterrcnn_resnet50_fpn(weights=FasterRCNN_ResNet50_FPN_Weights.COCO_V1)
+
+    recorder = Recorder(model)
+    recorder.load_model('Record/whole_detection.txt')
+    model = recorder.model
+
+    part_recoder = Recorder(part_model)
+    part_recoder.load_model('Record/part_detection.txt')
+    part_model = part_recoder.model
+
+    cutter = Cutter('CutImage')
+    part_cutter = Cutter('PartImage')
+    cnt = test_model(model, images, targets, cutter)
+    print('cnt:{}'.format(cnt))
+    test_model(part_model, images, part_labels, part_cutter, cnt)
+
+    dataFetcher = DataFetcher('Detection')
+    dataFetcher.read_images()
+    images = dataFetcher.get_image()
+
+    cnt = test_on_new_data(model, images, cutter)
+    print('cnt:{}'.format(cnt))
+    test_on_new_data(part_model, images, part_cutter, cnt)
 
 
 if __name__ == '__main__':

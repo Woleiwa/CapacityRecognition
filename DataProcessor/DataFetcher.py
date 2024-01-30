@@ -95,7 +95,7 @@ class DataFetcher:
                     lower = int(shape.get_points()[1][1])
                     processed_img = processor.cut_image((left, upper, right, lower))
                     self.cut_image.append(processed_img)
-                    processed_img.save('img/' + str(num) + '.jpg')
+                    processed_img.save('Img/' + str(num) + '.jpg')
                     num = num + 1
                     labels = label.split('_')
                     self.part_label.append(labels[0])
@@ -148,3 +148,25 @@ class DataFetcher:
                 whole_target.append(whole_dict)
 
         return whole_image, whole_target, part_target
+
+
+class BucketFetcher:
+    def __init__(self, path, height, width):
+        self.path = path
+        self.height = height
+        self.width = width
+        self.images = []
+        self.labels = []
+
+    def read_images(self):
+        for file_path in glob.glob(os.path.join(self.path, '*')):
+            file_name, file_extension = os.path.splitext(file_path)
+            file_extension = file_extension[1:]
+            if file_extension == 'jpg':
+                image = Image.open(file_path)
+                image.resize((self.height,self.width))
+                self.images.append(image)
+                label = file_name.split('_')[0]
+                self.labels.append(label)
+
+        return self.images, self.labels

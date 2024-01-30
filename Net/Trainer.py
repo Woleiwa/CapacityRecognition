@@ -127,7 +127,7 @@ class Trainer:
                 train_loss += losses.item()
             train_loss = train_loss / len(self.train_loader)
             accuracy, iou, distance = self.evaluate_obj_detection()
-            if best_distance > distance:
+            if best_distance < distance:
                 best_distance = distance
                 best_state = copy.deepcopy(self.model.state_dict())
             print("Epoch:{}, Train Loss:{}, Accuracy:{}, Iou:{}".format(epoch, train_loss, accuracy, iou))
@@ -176,7 +176,7 @@ class Trainer:
 
         accuracy = calculate_accuracy(all_targets, all_predictions)
         iou = calculate_iou(targets, predictions)
-        distance = (1 - accuracy) * (1 - accuracy) + (1 - iou) * (1 - iou)
-        distance = math.pow(distance, 1/ 2)
+        distance = accuracy ** 2 + iou ** 2
+        distance = math.pow(distance, 1 / 2)
 
         return accuracy, iou, distance

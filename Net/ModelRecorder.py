@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import os
 
 
 class Recorder:
@@ -25,5 +26,6 @@ class Recorder:
         self.criterion = checkpoint['loss']
 
     def load_model(self, path):
-        checkpoint = torch.load(path)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        if os.path.exists(path):
+            checkpoint = torch.load(path)
+            self.model.load_state_dict(checkpoint['model_state_dict'])

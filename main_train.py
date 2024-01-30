@@ -5,15 +5,15 @@ import torch
 
 import torch.nn as nn
 
+from torchvision.models import ResNet50_Weights
 from Net.ModelRecorder import Recorder
-from DataProcessor.DataFetcher import DataFetcher
+from DataProcessor.DataFetcher import DataFetcher, BucketFetcher
 from DataProcessor.Dataset import CustomDataset
 from torch.utils.data import DataLoader
 from torchvision import transforms, models
 from torch import optim
 from Net.Trainer import Trainer
 from Utils.Options import args_parser
-
 
 
 def custom_weights_init(m):
@@ -29,12 +29,16 @@ def train(slogan, train_dataset, test_dataset, args, num_workers, device, path):
                               num_workers=num_workers)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True, num_workers=num_workers)
 
-    model = models.resnet50(pretrained=True)
+    model = models.resnet50(weights=ResNet50_Weights.DEFAULT)
     model.apply(custom_weights_init)
     in_features = model.fc.in_features
     model.fc = nn.Sequential(
         nn.Dropout(0.5),
         nn.Linear(in_features, 2))
+
+    recorder = Recorder(model)
+    recorder.load_model(path)
+    model = recorder.model
 
     criterion = nn.CrossEntropyLoss()
     params_to_update = model.parameters()
@@ -146,8 +150,69 @@ def main():
     print(predicted_class)
 
 
+def train_bucket_detection():
+    system = platform.system()
+    if system == 'Windows':
+        num_workers = 0
+    else:
+        num_workers = 2
+    args = args_parser()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    buckets = BucketFetcher('WholeJudge', 224, 224)
+    images, labels = buckets.read_images()
+
+    transform = transforms.Compose([
+        transforms.Resize(size=(224, 224)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(degrees=15),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+    origin_dataset = CustomDataset(transform, images, labels)
+    train_list = []
+    test_list = []
+    for i in range(len(images)):
+        if random.randint(1, 10) < 8:
+            train_list.append(i)
+        else:
+            test_list.append(i)
+
+    train_dataset = origin_dataset.split(train_list)
+    test_dataset = origin_dataset.split(test_list)
+
+    model = train('Train the model of bucket detection judge', train_dataset, test_dataset, args, num_workers, device,
+                  'Record/whole_judge.txt')
+
+    buckets = BucketFetcher('PartJudge', 224, 224)
+    images, labels = buckets.read_images()
+
+    img, label = origin_dataset.get_origin(0)
+    img = transform(img).unsqueeze(0).to(device)
+    output = model(img)
+    print('label:' + label + 'output:' + str(output))
+    predicted_class = torch.argmax(output).item()
+    print(predicted_class)
+
+    origin_dataset = CustomDataset(transform, images, labels)
+    train_list = []
+    test_list = []
+    for i in range(len(images)):
+        if random.randint(1, 10) < 8:
+            train_list.append(i)
+        else:
+            test_list.append(i)
+
+    train_dataset = origin_dataset.split(train_list)
+    test_dataset = origin_dataset.split(test_list)
+
+    train('Train the model of part bucket detection judge', train_dataset, test_dataset, args, num_workers, device,
+          'Record/part_judge.txt')
+
+
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    main()
+    train_bucket_detection()
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
