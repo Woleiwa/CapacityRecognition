@@ -150,6 +150,8 @@ class Trainer:
             if accuracy > best_acc:
                 best_acc = accuracy
                 best_evaluate_weights = copy.deepcopy(self.model.state_dict())
+
+        print('Best accuracy: {}'.format(best_acc))
         self.model.load_state_dict(best_evaluate_weights)
 
     def write_to_file(self, path):

@@ -35,10 +35,11 @@ class FileDialogExample(QMainWindow):
         btn = QPushButton('Open Image', self)
         btn.clicked.connect(self.showDialog)
 
-        btn_classification = QPushButton('Open Image', self)
+        btn_classification = QPushButton('Classify', self)
         btn_classification.clicked.connect(self.classify)
-        self.layout.addWidget(btn)
 
+        self.layout.addWidget(btn)
+        self.layout.addWidget(btn_classification)
     def showDialog(self):
         # 打开文件对话框，获取选择的文件路径
         self.file_name, _ = QFileDialog.getOpenFileName(self, 'Open file', '.',
@@ -59,9 +60,11 @@ class FileDialogExample(QMainWindow):
         if image_reader.size().isValid():
             image = Image.open(self.file_name)
             res = self.classifier.classify(image)
-            cv2.imshow('Image', res)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+            cv2.imwrite('res.jpg', res)
+            pixmap = QPixmap('res.jpg')
+
+            self.label.setPixmap(pixmap)
+            self.label.resize(pixmap.width(), pixmap.height())
 
 
 if __name__ == '__main__':

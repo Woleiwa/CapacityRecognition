@@ -19,24 +19,26 @@ def resnet50_initialize():
     return model
 
 
-def process(cut_model, judge_model, classification_model, x, image):
-    targets = cut_model(x)[0]['boxes'].cpu().numpy()
+def process(cut_model, judge_model, classification_model, transform, device, x, image):
+    with torch.no_grad():
+        targets = cut_model(x)[0]['boxes'].cpu().numpy()
+        res_list = []
+        for box in targets:
+            box = [int(coord) for coord in box]
+            target = image.crop(box)
+            target = transform(target)
+            target = target.unsqueeze(0).to(device)
+            judge = judge_model(target)
+            predicted_class = torch.argmax(judge).item()
+            if predicted_class == 1:
+                res = classification_model(target)
+                predicted_class = torch.argmax(res).item()
+                if predicted_class == 0:
+                    result = 'full'
+                else:
+                    result = 'unfull'
 
-    res_list = []
-    for box in targets:
-        box = [int(coord) for coord in box]
-        target = image.crop(box)
-        judge = judge_model(target)
-        predicted_class = torch.argmax(judge).item()
-        if predicted_class == 1:
-            res = classification_model(target)
-            predicted_class = torch.argmax(res).item()
-            if predicted_class == 0:
-                result = 'full'
-            else:
-                result = 'unfull'
-
-            res_list.append((box, result))
+                res_list.append((box, result))
 
     return res_list
 
@@ -89,17 +91,25 @@ class Classifier:
         self.whole_judge_model.to(device)
         self.part_judge_model.to(device)
         self.whole_cut_model.to(device)
-        self.part_judge_model.to(device)
+        self.part_cut_model.to(device)
 
+        self.whole_model.eval()
+        self.part_model.eval()
+        self.whole_judge_model.eval()
+        self.part_judge_model.eval()
+        self.whole_cut_model.eval()
+        self.part_cut_model.eval()
         self.device = device
 
     def classify(self, image):
-        ToTensor = transforms.ToTensor()
-        x = ToTensor(image)
-        x.to(self.device)
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+        ])
+        x = transform(image).unsqueeze(0)
+        x = x.to(self.device)
 
-        whole_results = process(self.whole_cut_model, self.whole_judge_model, self.whole_model, x, image)
-        part_results = process(self.part_cut_model, self.part_judge_model, self.part_model, x, image)
+        whole_results = process(self.whole_cut_model, self.whole_judge_model, self.whole_model, self.transform, self.device, x, image)
+        part_results = process(self.part_cut_model, self.part_judge_model, self.part_model, self.transform, self.device, x, image)
 
         numpy_image = np.array(image)
         opencv_image = cv2.cvtColor(numpy_image, cv2.COLOR_RGB2BGR)
@@ -107,13 +117,13 @@ class Classifier:
         for res in whole_results:
             box = res[0]
             label = res[1]
-            opencv_image.rectangle(image, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
-            cv2.putText(image, label, (box[0], box[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+            cv2.rectangle(opencv_image, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
+            cv2.putText(opencv_image, label, (box[0], box[1] + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
 
         for res in part_results:
             box = res[0]
             label = res[1]
-            opencv_image.rectangle(image, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), 2)
-            cv2.putText(image, label, (box[0], box[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
+            cv2.rectangle(opencv_image, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), 2)
+            cv2.putText(opencv_image, label, (box[0], box[1] + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
 
         return opencv_image

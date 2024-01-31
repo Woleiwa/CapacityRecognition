@@ -29,3 +29,5 @@ class Recorder:
         if os.path.exists(path):
             checkpoint = torch.load(path)
             self.model.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            print("No record file: {}".format(path))

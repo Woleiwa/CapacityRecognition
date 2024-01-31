@@ -24,6 +24,7 @@ def custom_weights_init(m):
 
 
 def train(slogan, train_dataset, test_dataset, args, num_workers, device, path):
+    
     print(slogan)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
                               num_workers=num_workers)
@@ -48,6 +49,7 @@ def train(slogan, train_dataset, test_dataset, args, num_workers, device, path):
     trainer.train_with_evaluate(args.num_epochs)
     trainer.write_to_file(args.record_path)
 
+    model = trainer.model
     val_accuracy, val_precision, val_recall, val_f1 = trainer.eval_probability()
     files = [f for f in os.listdir('Result') if os.path.isfile(os.path.join('Result', f))]
     num = len(files)
@@ -85,7 +87,7 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
-
+    '''    
     origin_dataset = CustomDataset(transform, images, part_labels)
     part_train_list = []
     part_test_list = []
@@ -100,8 +102,9 @@ def main():
 
     part_train_dataset = origin_dataset.split(part_train_list)
     part_test_dataset = origin_dataset.split(part_test_list)
-    part_model = train('Train of part division model', part_train_dataset, part_test_dataset, args, num_workers,
-                       device, "Record/part_model_1.txt")
+    
+    part_model = train('Train of part_whole_classification model', part_train_dataset, part_test_dataset, args, num_workers,
+                       device, "Record/part_model.txt")
 
     img, label = origin_dataset.get_origin(0)
     img = transform(img).unsqueeze(0).to(device)
@@ -109,7 +112,7 @@ def main():
     print('label:' + label + 'output:' + str(output))
     predicted_class = torch.argmax(output).item()
     print(predicted_class)
-
+    '''
     full_dataset = CustomDataset(transform, images, full_labels)
     part_full_train_list = []
     part_full_test_list = []
@@ -131,9 +134,9 @@ def main():
     whole_full_train_dataset = full_dataset.split(whole_full_train_list)
     whole_full_test_dataset = full_dataset.split(whole_full_test_list)
     part_full_model = train('Train of part model', part_full_train_dataset, part_full_test_dataset, args, num_workers,
-                            device, 'Record/part_full_model_1.txt')
+                            device, 'Record/part_full_model.txt')
     whole_full_model = train('Train of whole model', whole_full_train_dataset, whole_full_test_dataset, args,
-                             num_workers, device, 'Record/whole_full_model_1.txt')
+                             num_workers, device, 'Record/whole_full_model.txt')
 
     img, label = part_full_train_dataset.get_origin(0)
     img = transform(img).unsqueeze(0).to(device)
@@ -213,6 +216,7 @@ def train_bucket_detection():
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+    main()
     train_bucket_detection()
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
